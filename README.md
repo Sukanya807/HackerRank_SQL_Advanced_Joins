@@ -53,10 +53,7 @@ This repository contains the solutions of HackerRank SQL queries on Advanced Joi
 
 ![](resources/question_5_1.png)
 
-### Solution 1:
+### Solution:
 
 ![](resources/question_5_answer_1.png)
-
-#### OR Solution 2:
-
 ![](resources/question_5_answer_2.png)
