@@ -1,0 +1,203 @@
+--1. You are given a table, Projects, containing three columns: Task_ID, Start_Date and End_Date. 
+--It is guaranteed that the difference between the End_Date and the Start_Date is equal to 1 day for each row in the table.
+
+--If the End_Date of the tasks are consecutive, then they are part of the same project. Samantha is interested in finding the total number of different projects completed.
+
+--Write a query to output the start and end dates of projects listed by the number of days it took to complete the project in ascending order. 
+--If there is more than one project that have the same number of completion days, then order by the start date of the project.
+
+WITH table_start_date AS (SELECT Start_Date,
+                          RANK() OVER (ORDER BY Start_Date) AS rank_start
+                          FROM Projects
+                          WHERE Start_Date NOT IN (SELECT End_Date FROM Projects))
+
+, table_end_date AS (SELECT End_Date,
+                     RANK() OVER (ORDER BY End_Date) AS rank_end
+                     FROM Projects
+                     WHERE End_Date NOT IN (SELECT Start_Date FROM Projects))  
+
+SELECT Start_Date,
+       End_Date
+FROM table_start_date, table_end_date
+WHERE rank_start = rank_end
+ORDER BY DATEDIFF(day, Start_Date, End_Date), Start_Date;
+
+----------------------------------------------------------------------------------------------------------
+
+--2. You are given three tables: Students, Friends and Packages. Students contains two columns: ID and Name. 
+--Friends contains two columns: ID and Friend_ID (ID of the ONLY best friend). Packages contains two columns: ID and Salary (offered salary in $ thousands per month).
+
+--Write a query to output the names of those students whose best friends got offered a higher salary than them. Names must be ordered by the salary amount offered to the best friends. 
+--It is guaranteed that no two students got same salary offer.
+
+WITH table_student_salary AS(SELECT s.ID,
+       s.Name,
+       p.Salary AS student_salary
+FROM Students AS s
+JOIN Packages AS p
+ON s.ID = p.ID)
+
+, table_friend_salary AS(SELECT f.ID,f.Friend_ID,
+       p.Salary AS friend_salary
+FROM Friends AS f
+JOIN Packages AS p
+ON f.Friend_ID = p.ID)
+
+SELECT tss.Name
+FROM table_student_salary AS tss
+JOIN table_friend_salary AS tfs
+ON tss.ID = tfs.ID
+WHERE tfs.friend_salary > tss.student_salary
+ORDER BY tfs.friend_salary;
+
+------------------------------------------------------------------------------------------------------------
+
+--3. You are given a table, Functions, containing two columns: X and Y.
+--Two pairs (X1, Y1) and (X2, Y2) are said to be symmetric pairs if X1 = Y2 and X2 = Y1.
+
+--Write a query to output all such symmetric pairs in ascending order by the value of X. List the rows such that X1 ≤ Y1.
+
+--** Query has been solved using ORACLE function
+
+--SOLUTION 1:
+
+SELECT LEAST(x,y), GREATEST(x,y)
+FROM Functions
+GROUP BY LEAST(x,y), GREATEST(x,y)
+HAVING COUNT(*) >1
+ORDER BY LEAST(x,y), GREATEST(x,y);
+
+--SOLUTION 2:
+
+SELECT x1, y1
+FROM
+(SELECT a.x AS x1,
+        b.x AS x2,
+        a.y AS y1,
+        b.y AS y2
+FROM Functions a, Functions b
+WHERE a.x = b.y AND b.x = a.y)
+GROUP BY x1, y1
+HAVING COUNT(x1) > 1 OR x1 < y1
+ORDER BY x1;
+
+--------------------------------------------------------------------------------------------------------------
+
+--4. Samantha interviews many candidates from different colleges using coding challenges and contests.
+ --Write a query to print the contest_id, hacker_id, name, and the sums of total_submissions, total_accepted_submissions,
+ --total_views, and total_unique_views for each contest sorted by contest_id. Exclude the contest from the result if all four sums are .
+
+--Note: A specific contest can be used to screen candidates at more than one college, but each college only holds  screening contest.
+
+WITH table_total_submission AS (SELECT coll.contest_id,
+       SUM(ss.total_submissions) AS sum_total_submit,
+       SUM(ss.total_accepted_submissions) AS sum_total_accepted_submit
+FROM Colleges AS coll
+JOIN Challenges AS chal
+ON coll.college_id = chal.college_id
+JOIN Submission_Stats AS ss
+ON ss.challenge_id = chal.challenge_id
+GROUP BY coll.contest_id),
+
+table_total_views AS(
+SELECT coll.contest_id,
+       SUM(vs.total_views) AS sum_total_views,
+       SUM(vs.total_unique_views) AS sum_total_unique_views
+FROM Colleges AS coll
+JOIN Challenges AS chal
+ON coll.college_id = chal.college_id
+JOIN View_Stats AS vs
+ON vs.challenge_id = chal.challenge_id
+GROUP BY coll.contest_id)
+
+SELECT con.contest_id,
+       con.hacker_id,
+       con.name,
+       tts.sum_total_submit,
+       tts.sum_total_accepted_submit,
+       ttv.sum_total_views,
+       ttv.sum_total_unique_views
+FROM Contests AS con
+JOIN table_total_submission AS tts
+ON tts.contest_id = con.contest_id
+JOIN table_total_views AS ttv
+ON ttv.contest_id = con.contest_id
+WHERE tts.sum_total_submit>0 OR tts.sum_total_accepted_submit>0 OR ttv.sum_total_views>0 OR ttv.sum_total_unique_views>0
+ORDER BY con.contest_id;
+
+------------------------------------------------------------------------------------------------------------------------
+
+--5. Julia conducted a  days of learning SQL contest. The start date of the contest was March 01, 2016 and the end date was March 15, 2016.
+
+--Write a query to print total number of unique hackers who made at least  submission each day (starting on the first day of the contest), 
+--and find the hacker_id and name of the hacker who made maximum number of submissions each day. 
+--If more than one such hacker has a maximum number of submissions, print the lowest hacker_id. The query should print this information for each day of the contest, sorted by the date.
+
+DECLARE @consistent_hackers TABLE
+( hacker_id INT,
+  submission_date DATE
+);
+
+DECLARE @subdate DATE;
+DECLARE @remainingdate DATE;
+
+SET @subdate = '2016-03-01';
+SET @remainingdate = '2016-03-01';
+
+INSERT INTO @consistent_hackers
+SELECT hacker_id,
+       submission_date
+FROM Submissions
+WHERE submission_date LIKE '2016-03-01';
+
+WHILE @subdate < '2016-03-15'
+BEGIN
+
+SET @subdate = DATEADD(day , 1, @subdate);
+
+INSERT INTO @consistent_hackers
+
+SELECT s.hacker_id,
+       s.submission_date
+FROM Submissions  AS s
+JOIN @consistent_hackers AS ch
+ON ch.hacker_id = s.hacker_id AND ch.submission_date LIKE @remainingdate
+WHERE s.submission_date LIKE @subdate
+
+SET @remainingdate = DATEADD(day, 1, @remainingdate)
+
+END;
+
+DECLARE @count_hackers TABLE
+(hacker_id INT,
+ submission_date DATE);
+ 
+ INSERT INTO @count_hackers
+ SELECT COUNT(DISTINCT hacker_id),
+        submission_date
+FROM @consistent_hackers
+GROUP BY submission_date;
+
+ WITH max_hackers AS (SELECT s.hacker_id,
+       h.name,
+       s.submission_date,
+       ROW_NUMBER() OVER (PARTITION BY s.submission_date ORDER BY COUNT(s.hacker_id) DESC, s.hacker_id) AS row_num
+       FROM Hackers AS h
+       JOIN Submissions AS s
+       ON h.hacker_id = s.hacker_id
+       GROUP BY s.hacker_id, h.name, s.submission_date)
+       
+SELECT s.submission_date,
+       ch.hacker_id,
+       mh.hacker_id,
+       mh.name
+FROM Submissions AS s
+JOIN max_hackers AS mh
+ON s.submission_date = mh.submission_date AND row_num = 1
+JOIN @count_hackers AS ch ON ch.submission_date = s.submission_date
+GROUP BY s.submission_date, ch.hacker_id, mh.hacker_id, mh.name
+ORDER BY s.submission_date;
+
+
+
+
